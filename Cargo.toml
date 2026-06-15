@@ -1,0 +1,25 @@
+[package]
+name = "hammurabi-ai-highway"
+version = "0.1.0"
+edition = "2021"
+description = "Hammurabi AI Highway CLI — natural language to gas-free on-chain execution via Venice AI + 1Shot API on Base"
+
+[[bin]]
+name = "hammurabi"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+ethers-core = "2"
+ethers-signers = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dotenvy = "0.15"
+anyhow = "1"
+hex = "0.4"
+chrono = "0.4"
+async-trait = "0.1"
+sha2 = "0.10"
+rusqlite = { version = "0.32", features = ["bundled"] }

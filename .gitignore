@@ -1,0 +1,4 @@
+/target
+.env
+eduba_registry.db
+eduba_registry.db-*
