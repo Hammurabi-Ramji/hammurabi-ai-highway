@@ -25,7 +25,7 @@ impl Config {
                 "VENICE_BASE_URL",
                 "https://api.venice.ai/api/v1",
             ),
-            venice_model: env_var_or("VENICE_MODEL", "qwen-2.5-coder-32b"),
+            venice_model: env_var_or("VENICE_MODEL", "qwen-3-7-max"),
             hammurabi_private_key: env_var("HAMMURABI_PRIVATE_KEY")?,
             oneshot_api_key: env_var("ONESHOT_API_KEY")?,
             oneshot_base_url: env_var_or("ONESHOT_BASE_URL", "https://api.1shotapi.com/v1"),

@@ -10,7 +10,7 @@ and no gas fees.
 - **Language:** Rust (`tokio`, `clap`, `reqwest`, `ethers-core`/`ethers-signers`, `serde_json`, `dotenvy`)
 - **Network:** Base (EVM, chainId 8453)
 - **The Brain — Venice AI:** translates natural-language intent into raw
-  smart-contract calldata using the `qwen-2.5-coder-32b` model, authenticated
+  smart-contract calldata using the `qwen-3-7-max` model, authenticated
   via **x402** (a timestamped payload signed with our local EVM wallet,
   passed as `X-402-*` headers).
 - **The Hands — 1Shot API:** takes the calldata from Venice and executes it
@@ -99,7 +99,7 @@ EVM wallet signs `"{timestamp}.{body}"`), and is sent as **three** headers:
 - `X-402-Timestamp` — unix timestamp the signature is bound to
 - `X-402-Signature` — `0x`-prefixed ECDSA (EIP-191 personal_sign) signature
 
-`POST https://api.venice.ai/api/v1/chat/completions` · model `qwen-2.5-coder-32b`.
+`POST https://api.venice.ai/api/v1/chat/completions` · model `qwen-3-7-max`.
 
 ### 2. 1Shot relayer payload
 

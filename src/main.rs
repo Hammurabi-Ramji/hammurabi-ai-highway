@@ -66,7 +66,7 @@ async fn run(intent: &str) -> Result<()> {
 
     let client = reqwest::Client::new();
 
-    step("Signing x402 auth and querying Venice AI (qwen-2.5-coder-32b)...");
+    step(&format!("Signing x402 auth and querying Venice AI ({})...", config.venice_model));
     let calldata = venice::get_calldata(&client, &config, intent).await?;
     done();
     println!("  to:    {}", calldata.to);

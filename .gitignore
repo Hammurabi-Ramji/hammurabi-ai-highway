@@ -2,3 +2,6 @@
 .env
 eduba_registry.db
 eduba_registry.db-*
+
+# media (host on Devpost, not in repo)
+*.mp4

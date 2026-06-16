@@ -1,6 +1,6 @@
 // Hammurabi AI Highway — Venice AI integration ("The Brain").
 // Translates a natural-language intent into raw Base-network calldata using
-// Venice's qwen-2.5-coder-32b model, authenticated via x402.
+// Venice's qwen-3-7-max model, authenticated via x402.
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
