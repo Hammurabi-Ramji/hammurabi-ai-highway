@@ -20,8 +20,9 @@ impl Config {
             venice_api_key: env_var("VENICE_API_KEY")?,
             venice_base_url: env_var("VENICE_BASE_URL").unwrap_or_else(|_| "https://api.venice.ai/api/v1".to_string()),
             venice_model: env_var("VENICE_MODEL").unwrap_or_else(|_| "qwen-3-7-max".to_string()),
-            hammurabi_private_key: env_var("HAMMURABI_PRIVATE_KEY")
-                .context("HAMMURABI_PRIVATE_KEY not set in environment")?,
+            // Resolved at runtime: from the encrypted key store (preferred) or
+            // this plaintext env var as a fallback. Empty when neither is set.
+            hammurabi_private_key: env_var("HAMMURABI_PRIVATE_KEY").unwrap_or_default(),
             oneshot_api_key: env_var("ONESHOT_API_KEY")?,
             oneshot_base_url: env_var("ONESHOT_BASE_URL").unwrap_or_else(|_| "https://api.1shotapi.com/v1".to_string()),
             oneshot_wallet_id: env_var("ONESHOT_WALLET_ID")?,

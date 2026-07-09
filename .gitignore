@@ -10,3 +10,7 @@ eduba_registry.db-*
 *.db
 *.db-shm
 *.db-wal
+
+# encrypted key store (never commit)
+hammurabi_keys/
+*.enc

@@ -4,9 +4,7 @@
 // process; no gas is ever paid by the user.
 
 mod config;
-// TODO(crypto): deferred — see note in src/lib.rs. Does not compile against
-// pinned crate versions and is unused. Re-enable once rewritten and verified.
-// mod crypto;
+mod crypto;
 mod error;
 mod oneshot;
 mod pipeline;
@@ -17,10 +15,14 @@ mod venice;
 mod x402;
 
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use config::Config;
 use std::io::Write;
+use std::path::PathBuf;
+
+/// Logical id of the single signing key in the encrypted store.
+const KEY_ID: &str = "signing";
 
 #[derive(Parser)]
 #[command(
@@ -50,6 +52,17 @@ enum Commands {
         #[arg(long)]
         intent: String,
     },
+    /// Manage the encrypted EVM signing key
+    Keys {
+        #[command(subcommand)]
+        action: KeyAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum KeyAction {
+    /// Encrypt an EVM private key into the local key store under a passphrase
+    Init,
 }
 
 #[tokio::main]
@@ -58,15 +71,108 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Run { intent } => run(&intent).await,
-        Commands::Pipeline { intent } => pipeline::run(&intent).await.map(|_| ()),
+        Commands::Pipeline { intent } => {
+            // Make the signing key available to the pipeline's own config load
+            // (Digital Hands reads it for the on-chain step).
+            if let Some(key) = resolve_signing_key().await? {
+                std::env::set_var("HAMMURABI_PRIVATE_KEY", key);
+            }
+            pipeline::run(&intent).await.map(|_| ())
+        }
+        Commands::Keys { action } => match action {
+            KeyAction::Init => keys_init().await,
+        },
     }
+}
+
+/// Directory holding the encrypted key store (override with `HAMMURABI_KEY_STORE`).
+fn key_store_dir() -> PathBuf {
+    std::env::var("HAMMURABI_KEY_STORE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("hammurabi_keys"))
+}
+
+fn key_manager() -> crypto::KeyManager {
+    crypto::KeyManager::file_backed(key_store_dir(), KEY_ID)
+}
+
+/// Read a secret from the terminal without echoing it.
+fn prompt_hidden(prompt: &str) -> Result<String> {
+    rpassword::prompt_password(prompt).context("failed to read input from terminal")
+}
+
+/// Resolve the EVM signing key. Prefers the encrypted store (prompting for a
+/// passphrase); falls back to the plaintext `HAMMURABI_PRIVATE_KEY` env var;
+/// returns `None` if neither is available.
+async fn resolve_signing_key() -> Result<Option<String>> {
+    let km = key_manager();
+    if km.exists().await {
+        let passphrase = prompt_hidden("Passphrase to unlock signing key: ")?;
+        let key = km.load_private_key_hex(&passphrase).await?;
+        return Ok(Some(key));
+    }
+    match std::env::var("HAMMURABI_PRIVATE_KEY") {
+        Ok(k) if !k.trim().is_empty() => {
+            eprintln!(
+                "⚠ Using plaintext HAMMURABI_PRIVATE_KEY from the environment. \
+                 Run `hammurabi keys init` to encrypt it at rest."
+            );
+            Ok(Some(k))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// `keys init`: encrypt a private key (from the env var, or a hidden prompt)
+/// under a passphrase and persist it to the local key store.
+async fn keys_init() -> Result<()> {
+    let km = key_manager();
+    if km.exists().await {
+        bail!(
+            "an encrypted key already exists at {}. Remove it to re-initialize.",
+            key_store_dir().join(format!("{KEY_ID}.enc")).display()
+        );
+    }
+
+    let private_key = match std::env::var("HAMMURABI_PRIVATE_KEY") {
+        Ok(k) if !k.trim().is_empty() => {
+            println!("Encrypting the private key from HAMMURABI_PRIVATE_KEY.");
+            k
+        }
+        _ => prompt_hidden("EVM private key (hex): ")?,
+    };
+
+    let passphrase = prompt_hidden("New passphrase: ")?;
+    if passphrase.len() < 8 {
+        bail!("passphrase must be at least 8 characters");
+    }
+    let confirm = prompt_hidden("Confirm passphrase: ")?;
+    if passphrase != confirm {
+        bail!("passphrases do not match");
+    }
+
+    km.store_private_key(private_key.trim(), &passphrase).await?;
+
+    println!(
+        "✓ Encrypted signing key written to {}",
+        key_store_dir().join(format!("{KEY_ID}.enc")).display()
+    );
+    println!("  You can now remove HAMMURABI_PRIVATE_KEY from your .env.");
+    Ok(())
 }
 
 async fn run(intent: &str) -> Result<()> {
     println!("=== Hammurabi AI Highway ===");
     println!("Intent: \"{intent}\"\n");
 
-    let config = Config::from_env()?;
+    let mut config = Config::from_env()?;
+    match resolve_signing_key().await? {
+        Some(key) => config.hammurabi_private_key = key,
+        None => bail!(
+            "no signing key available — run `hammurabi keys init` to create an \
+             encrypted key, or set HAMMURABI_PRIVATE_KEY"
+        ),
+    }
     println!("Venice AI key:  {}", config::mask(&config.venice_api_key));
     println!("1Shot API key:  {}", config::mask(&config.oneshot_api_key));
     println!("1Shot wallet:   {}\n", config.oneshot_wallet_id);
