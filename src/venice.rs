@@ -27,7 +27,11 @@ single-line JSON object containing the raw transaction fields needed to execute 
 Do not include any explanation, markdown formatting, or additional fields. Return raw JSON only."#;
 
 /// Ask Venice AI to translate `intent` into `{to, data, value}` calldata.
-pub async fn get_calldata(client: &reqwest::Client, config: &Config, intent: &str) -> Result<Calldata> {
+pub async fn get_calldata(
+    client: &reqwest::Client,
+    config: &Config,
+    intent: &str,
+) -> Result<Calldata> {
     let body = json!({
         "model": config.venice_model,
         "messages": [
@@ -85,6 +89,7 @@ fn parse_calldata(content: &str) -> Result<Calldata> {
         .trim_end_matches("```")
         .trim();
 
-    serde_json::from_str(cleaned)
-        .with_context(|| format!("Failed to parse calldata JSON from Venice AI response:\n{cleaned}"))
+    serde_json::from_str(cleaned).with_context(|| {
+        format!("Failed to parse calldata JSON from Venice AI response:\n{cleaned}")
+    })
 }

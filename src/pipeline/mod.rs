@@ -15,15 +15,15 @@ pub mod ram_gate;
 pub mod ram_genie;
 
 #[cfg(test)]
-pub mod eduba_test;
-#[cfg(test)]
-pub mod ram_genie_test;
-#[cfg(test)]
-pub mod han_solo_test;
+pub mod bsm_test;
 #[cfg(test)]
 pub mod digital_hands_test;
 #[cfg(test)]
-pub mod bsm_test;
+pub mod eduba_test;
+#[cfg(test)]
+pub mod han_solo_test;
+#[cfg(test)]
+pub mod ram_genie_test;
 
 /// A unit of generated work passing through the pipeline.
 #[derive(Debug, Clone)]
@@ -123,18 +123,21 @@ pub async fn run(intent: &str) -> Result<Payload> {
         .timeout(std::time::Duration::from_secs(20))
         .build()
         .context("failed to build HTTP client")?;
-    
+
     let sovereign_url = crate::sovereign::base_url();
     let sovereign_online = crate::sovereign::health(&http, &sovereign_url).await;
     println!(
         "Sovereign Stack gateway @ {sovereign_url}: {}\n",
-        if sovereign_online { "ONLINE" } else { "offline (stages degrade gracefully)" }
+        if sovereign_online {
+            "ONLINE"
+        } else {
+            "offline (stages degrade gracefully)"
+        }
     );
 
     let ctx = PipelineContext {
         config,
-        db_path: std::env::var("EDUBA_DB_PATH")
-            .unwrap_or_else(|_| "eduba_registry.db".to_string()),
+        db_path: std::env::var("EDUBA_DB_PATH").unwrap_or_else(|_| "eduba_registry.db".to_string()),
         http,
         sovereign_url,
         sovereign_online,
@@ -145,14 +148,19 @@ pub async fn run(intent: &str) -> Result<Payload> {
     let mut payload = Payload::new(intent);
 
     for (i, stage) in pipeline.iter().enumerate() {
-        println!("-- Lane {}/{}: {} ({}) --", i + 1, total, stage.name(), stage.role());
-        
-        payload = stage.process(&ctx, payload).await
-            .map_err(|e| {
-                eprintln!("[ERROR] Stage {} failed: {}", stage.name(), e);
-                e
-            })?;
-        
+        println!(
+            "-- Lane {}/{}: {} ({}) --",
+            i + 1,
+            total,
+            stage.name(),
+            stage.role()
+        );
+
+        payload = stage.process(&ctx, payload).await.map_err(|e| {
+            eprintln!("[ERROR] Stage {} failed: {}", stage.name(), e);
+            e
+        })?;
+
         println!();
     }
 

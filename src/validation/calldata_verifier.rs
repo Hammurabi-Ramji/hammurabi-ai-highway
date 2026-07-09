@@ -22,19 +22,19 @@ pub struct CalldataVerificationResult {
 pub enum VerificationError {
     #[error("Address is not a contract: {address}")]
     NotContract { address: Address },
-    
+
     #[error("Address not whitelisted: {address}")]
     NotWhitelisted { address: Address },
-    
+
     #[error("Invalid ABI signature: {function_hash}")]
     InvalidSignature { function_hash: H256 },
-    
+
     #[error("Value exceeds limit: {val} > {max}")]
     ValueExceedsLimit { val: u128, max: u128 },
-    
+
     #[error("Replay attack detected")]
     ReplayDetected,
-    
+
     #[error("High risk score: {score}")]
     HighRisk { score: u32 },
 }
@@ -50,12 +50,13 @@ impl AbiRegistry {
             contracts: HashMap::new(),
         }
     }
-    
+
     pub fn register_contract(&mut self, address: &str, signatures: Vec<&str>) {
         let addr = address.to_lowercase();
-        self.contracts.insert(addr, signatures.iter().map(|s| s.to_string()).collect());
+        self.contracts
+            .insert(addr, signatures.iter().map(|s| s.to_string()).collect());
     }
-    
+
     /// Whether the contract at `address` has the 4-byte function `selector`
     /// registered. Both sides are compared as `0x`-prefixed hex strings.
     pub fn supports_function(&self, address: &Address, selector: &[u8]) -> bool {
@@ -67,7 +68,10 @@ impl AbiRegistry {
 
         self.contracts
             .get(&addr_key)
-            .map(|sigs| sigs.iter().any(|sig| sig.eq_ignore_ascii_case(&selector_hex)))
+            .map(|sigs| {
+                sigs.iter()
+                    .any(|sig| sig.eq_ignore_ascii_case(&selector_hex))
+            })
             .unwrap_or(false)
     }
 }
@@ -99,7 +103,7 @@ pub struct CalldataVerifier {
 impl CalldataVerifier {
     pub fn new() -> Result<Self> {
         let mut approved_contracts = HashMap::new();
-        
+
         approved_contracts.insert(
             8453,
             BTreeSet::from_iter(vec![
@@ -108,20 +112,20 @@ impl CalldataVerifier {
                 "0xd9aaec86b65d86f6a7b5b1b0c425a9b77186762b".to_string(),
             ]),
         );
-        
+
         let mut abi_registry = AbiRegistry::new();
         abi_registry.register_contract(
             "0x4200000000000000000000000000000000000006",
             vec!["0x", "0x095ea7b3", "0x23b872dd", "0x18160fd1"],
         );
-        
+
         Ok(Self {
             approved_contracts: Arc::new(RwLock::new(approved_contracts)),
             abi_registry: Arc::new(RwLock::new(abi_registry)),
             max_value: Arc::new(RwLock::new(100_000_000_000_000_000_000u128)),
         })
     }
-    
+
     /// Whether the verifier has any whitelisted contracts for the given chain.
     pub async fn supports_chain(&self, chain_id: u64) -> bool {
         self.approved_contracts.read().await.contains_key(&chain_id)
@@ -134,10 +138,11 @@ impl CalldataVerifier {
         // failure, so the caller still receives a scored assessment.
         self.verify_contract_address(&calldata.to).await?;
         self.verify_value_bounds(&calldata.value).await?;
-        self.verify_replay_protection(&calldata.to, &calldata.data).await?;
+        self.verify_replay_protection(&calldata.to, &calldata.data)
+            .await?;
 
         let risk_score = self.calculate_risk_score(calldata).await?;
-        
+
         if risk_score > 80 {
             return Ok(CalldataVerificationResult {
                 approved: false,
@@ -145,33 +150,39 @@ impl CalldataVerifier {
                 rejection_reason: Some(format!("High risk score: {}", risk_score)),
             });
         }
-        
+
         Ok(CalldataVerificationResult {
             approved: true,
             risk_score,
             rejection_reason: None,
         })
     }
-    
+
     async fn verify_contract_address(&self, to: &str) -> Result<(), VerificationError> {
-        let _address = to.parse::<Address>()
-            .map_err(|_| VerificationError::NotWhitelisted { address: Address::zero() })?;
-        
+        let _address = to
+            .parse::<Address>()
+            .map_err(|_| VerificationError::NotWhitelisted {
+                address: Address::zero(),
+            })?;
+
         let whitelist = self.approved_contracts.read().await;
         let chain_id = 8453;
         let address_str = to.to_lowercase();
-        
-        let is_whitelisted = whitelist.get(&chain_id)
+
+        let is_whitelisted = whitelist
+            .get(&chain_id)
             .map(|addrs| addrs.contains(&address_str))
             .unwrap_or(false);
-        
+
         if !is_whitelisted {
-            return Err(VerificationError::NotWhitelisted { address: Address::zero() });
+            return Err(VerificationError::NotWhitelisted {
+                address: Address::zero(),
+            });
         }
-        
+
         Ok(())
     }
-    
+
     /// Whether `data`'s leading 4-byte selector is a registered function on the
     /// contract at `to`. Malformed addresses or calldata count as unknown.
     async fn selector_known(&self, to: &str, data: &str) -> bool {
@@ -186,35 +197,43 @@ impl CalldataVerifier {
         if bytes.len() < 4 {
             return false;
         }
-        self.abi_registry.read().await.supports_function(&address, &bytes[..4])
+        self.abi_registry
+            .read()
+            .await
+            .supports_function(&address, &bytes[..4])
     }
-    
+
     async fn verify_value_bounds(&self, value: &str) -> Result<(), VerificationError> {
-        let val = U256::from_str_radix(&value.trim_start_matches("0x"), 16)
+        let val = U256::from_str_radix(value.trim_start_matches("0x"), 16)
             .unwrap_or(U256::zero())
             .as_u128();
-        
+
         let max = *self.max_value.read().await;
-        
+
         if val > max {
             return Err(VerificationError::ValueExceedsLimit { val, max });
         }
-        
+
         Ok(())
     }
-    
-    async fn verify_replay_protection(&self, _to: &str, _data: &str) -> Result<(), VerificationError> {
+
+    async fn verify_replay_protection(
+        &self,
+        _to: &str,
+        _data: &str,
+    ) -> Result<(), VerificationError> {
         Ok(())
     }
-    
+
     async fn calculate_risk_score(&self, calldata: &Calldata) -> Result<u32> {
         let mut score = 0u32;
-        
+
         let whitelist = self.approved_contracts.read().await;
-        let is_whitelisted = whitelist.get(&8453)
+        let is_whitelisted = whitelist
+            .get(&8453)
             .map(|addrs| addrs.contains(&calldata.to.to_lowercase()))
             .unwrap_or(false);
-        
+
         if !is_whitelisted {
             score += 30;
         }
@@ -225,23 +244,23 @@ impl CalldataVerifier {
             score += 40;
         }
 
-        let val = U256::from_str_radix(&calldata.value.trim_start_matches("0x"), 16)
+        let val = U256::from_str_radix(calldata.value.trim_start_matches("0x"), 16)
             .unwrap_or(U256::zero())
             .as_u128();
 
         if val > 1_000_000_000_000_000_000u128 {
             score += 20;
         }
-        
+
         if calldata.data.len() > 1000 {
             score += 15;
         }
-        
+
         let max_value = *self.max_value.read().await;
         if val > max_value / 10 {
             score += 15;
         }
-        
+
         Ok(score)
     }
 }
@@ -255,13 +274,18 @@ impl Default for CalldataVerifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_verifier_creation() {
         let verifier = CalldataVerifier::new().unwrap();
-        assert!(verifier.approved_contracts.read().await.get(&8453).is_some());
+        assert!(verifier
+            .approved_contracts
+            .read()
+            .await
+            .get(&8453)
+            .is_some());
     }
-    
+
     #[tokio::test]
     async fn test_whitelisted_contract() {
         let verifier = CalldataVerifier::new().unwrap();
@@ -270,7 +294,7 @@ mod tests {
             data: "0x12345678".to_string(),
             value: "0x0".to_string(),
         };
-        
+
         assert!(verifier.verify_contract_address(&calldata.to).await.is_ok());
     }
 }

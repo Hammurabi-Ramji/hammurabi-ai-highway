@@ -25,13 +25,19 @@ impl Stage for DigitalHands {
             .any(|r| r == "on-chain execution required");
 
         if !needs_onchain {
-            payload.note(self.name(), "no on-chain action in intent — relayer skipped");
+            payload.note(
+                self.name(),
+                "no on-chain action in intent — relayer skipped",
+            );
             return Ok(payload);
         }
 
         match &ctx.config {
             Some(config) => {
-                payload.note(self.name(), "signing x402 + requesting calldata from Venice AI...");
+                payload.note(
+                    self.name(),
+                    "signing x402 + requesting calldata from Venice AI...",
+                );
                 let calldata = venice::get_calldata(&ctx.http, config, &payload.intent).await?;
                 payload.note(self.name(), format!("calldata target {}", calldata.to));
                 let tx = oneshot::execute(&ctx.http, config, &calldata).await?;

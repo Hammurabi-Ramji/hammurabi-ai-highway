@@ -48,25 +48,40 @@ impl Stage for Bsm {
             )
             .context("BSM: failed to persist artifact to registry")?;
 
-            payload.note(self.name(), "artifact locked into Eduba registry (future runs = cache hit)");
+            payload.note(
+                self.name(),
+                "artifact locked into Eduba registry (future runs = cache hit)",
+            );
 
             if ctx.sovereign_online {
                 let name = format!("hammurabi-{}", payload.intent_hash);
-                match sovereign::create_ramgenie_project(&ctx.http, &ctx.sovereign_url, &name).await {
-                    Ok(true) => payload.note(self.name(), format!("registered project '{name}' on gateway")),
+                match sovereign::create_ramgenie_project(&ctx.http, &ctx.sovereign_url, &name).await
+                {
+                    Ok(true) => payload.note(
+                        self.name(),
+                        format!("registered project '{name}' on gateway"),
+                    ),
                     Ok(false) => payload.note(self.name(), "gateway rejected project registration"),
-                    Err(e) => payload.note(self.name(), format!("gateway registration failed ({e})")),
+                    Err(e) => {
+                        payload.note(self.name(), format!("gateway registration failed ({e})"))
+                    }
                 }
             }
         }
 
         payload.finalized = true;
-        let tx = payload.onchain_tx.clone().unwrap_or_else(|| "none".to_string());
+        let tx = payload
+            .onchain_tx
+            .clone()
+            .unwrap_or_else(|| "none".to_string());
         payload.result = format!(
             "Finalized | requirements={} artifacts={} security={} tx={}",
             payload.requirements.len(),
             payload.artifacts.len(),
-            payload.security_verdict.clone().unwrap_or_else(|| "n/a".into()),
+            payload
+                .security_verdict
+                .clone()
+                .unwrap_or_else(|| "n/a".into()),
             tx,
         );
         payload.note(self.name(), "BSM lockdown complete");

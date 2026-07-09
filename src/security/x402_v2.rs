@@ -6,11 +6,11 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
+use chrono::Utc;
 use ethers_core::utils::to_checksum;
 use ethers_signers::{LocalWallet, Signer};
 use std::collections::HashMap;
 use std::time::Duration;
-use chrono::Utc;
 
 /// Rate limiter structure (simplified)
 pub struct RateLimiter {
@@ -27,7 +27,7 @@ impl RateLimiter {
             max_requests: max_requests_per_hour,
         }
     }
-    
+
     pub async fn allow(&self, _address: &str, _count: u64) -> bool {
         // Simplified: in production use Redis
         true
@@ -42,16 +42,14 @@ pub struct X402AuthV2 {
 
 impl X402AuthV2 {
     pub async fn new(private_key: &str) -> Result<Self> {
-        let wallet: LocalWallet = private_key
-            .parse()
-            .context("Invalid private key")?;
-        
+        let wallet: LocalWallet = private_key.parse().context("Invalid private key")?;
+
         Ok(Self {
             wallet,
             rate_limiter: RateLimiter::new(100),
         })
     }
-    
+
     /// Sign request with rate limiting
     pub async fn sign(&self, body: &str) -> Result<X402Auth> {
         // Check rate limit
@@ -59,22 +57,23 @@ impl X402AuthV2 {
         if !self.rate_limiter.allow(&format!("{:?}", address), 1).await {
             anyhow::bail!("Rate limit exceeded");
         }
-        
+
         let timestamp = Utc::now().timestamp();
         let message = format!("{timestamp}.{body}");
-        
-        let signature = self.wallet
+
+        let signature = self
+            .wallet
             .sign_message(message.as_bytes())
             .await
             .context("Failed to sign x402 auth payload")?;
-        
+
         Ok(X402Auth {
             address: to_checksum(&address, None),
             timestamp: timestamp.to_string(),
             signature: format!("0x{}", hex::encode(signature.to_vec())),
         })
     }
-    
+
     /// Get wallet address
     pub fn address(&self) -> ethers_core::types::Address {
         self.wallet.address()
@@ -102,13 +101,14 @@ impl X402Auth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_x402_v2_creation() {
-        let auth = X402AuthV2::new("0x0000000000000000000000000000000000000000000000000000000000000001")
-            .await
-            .unwrap();
-        
+        let auth =
+            X402AuthV2::new("0x0000000000000000000000000000000000000000000000000000000000000001")
+                .await
+                .unwrap();
+
         assert_eq!(
             auth.address(),
             "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
@@ -116,15 +116,16 @@ mod tests {
                 .unwrap()
         );
     }
-    
+
     #[tokio::test]
     async fn test_sign() {
-        let auth = X402AuthV2::new("0x0000000000000000000000000000000000000000000000000000000000000001")
-            .await
-            .unwrap();
-        
+        let auth =
+            X402AuthV2::new("0x0000000000000000000000000000000000000000000000000000000000000001")
+                .await
+                .unwrap();
+
         let signed = auth.sign("test body").await.unwrap();
-        
+
         assert!(!signed.address.is_empty());
         assert!(!signed.timestamp.is_empty());
         assert!(!signed.signature.is_empty());

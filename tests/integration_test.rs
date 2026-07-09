@@ -63,7 +63,7 @@ async fn test_ram_genie_stage() {
     let payload = stage.process(&ctx, payload).await.unwrap();
 
     assert!(!payload.intent_hash.is_empty());
-    assert!(payload.requirements.len() > 0);
+    assert!(!payload.requirements.is_empty());
     assert!(payload
         .requirements
         .contains(&"on-chain execution required".to_string()));

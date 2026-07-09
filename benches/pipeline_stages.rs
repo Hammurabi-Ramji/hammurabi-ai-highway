@@ -18,7 +18,7 @@ fn bench_ram_genie(c: &mut Criterion) {
     let context = PipelineContext {
         intent: payload.clone(),
     };
-    
+
     c.bench_function("ram_genie (0.2ms target)", |b| {
         b.iter(|| {
             // Simulate parsing and fingerprint extraction
@@ -33,7 +33,7 @@ fn bench_falcon_mcp(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("falcon_mcp (8.5ms target)", |b| {
         b.iter(|| {
             // Simulate context assembly and tool manifest
@@ -48,7 +48,7 @@ fn bench_eduba(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("eduba_cache (0.2ms target)", |b| {
         b.iter(|| {
             // Simulate cache hit/miss
@@ -63,7 +63,7 @@ fn bench_han_solo(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("han_solo_build (2ms local)", |b| {
         b.iter(|| {
             // Simulate artifact generation
@@ -78,7 +78,7 @@ fn bench_ram_gate(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("ram_gate_security (0.6ms target)", |b| {
         b.iter(|| {
             // Simulate security scanning
@@ -93,7 +93,7 @@ fn bench_claude_polish(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("claude_polish (0.25ms target)", |b| {
         b.iter(|| {
             // Simulate artifact polishing
@@ -108,7 +108,7 @@ fn bench_digital_hands(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("digital_hands_relay (2-4s observed)", |b| {
         b.iter(|| {
             // Simulate Venice AI + 1Shot relay (this is the bottleneck)
@@ -123,7 +123,7 @@ fn bench_bsm(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("bsm_lockdown (0.35ms target)", |b| {
         b.iter(|| {
             // Simulate final lockdown
@@ -138,38 +138,46 @@ fn bench_full_pipeline(c: &mut Criterion) {
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     c.bench_function("full_pipeline (total)", |b| {
         b.iter(|| {
-            let p1 = { // Ram Genie
+            let p1 = {
+                // Ram Genie
                 std::thread::sleep(Duration::from_micros(200));
                 context.clone()
             };
-            let p2 = { // Falcon MCP
+            let p2 = {
+                // Falcon MCP
                 std::thread::sleep(Duration::from_millis(8));
                 p1
             };
-            let p3 = { // Eduba
+            let p3 = {
+                // Eduba
                 std::thread::sleep(Duration::from_micros(200));
                 p2
             };
-            let p4 = { // Han Solo
+            let p4 = {
+                // Han Solo
                 std::thread::sleep(Duration::from_millis(2));
                 p3
             };
-            let p5 = { // Ram Gate
+            let p5 = {
+                // Ram Gate
                 std::thread::sleep(Duration::from_micros(600));
                 p4
             };
-            let p6 = { // Claude Polish
+            let p6 = {
+                // Claude Polish
                 std::thread::sleep(Duration::from_micros(250));
                 p5
             };
-            let p7 = { // Digital Hands (main bottleneck)
+            let p7 = {
+                // Digital Hands (main bottleneck)
                 std::thread::sleep(Duration::from_millis(2000));
                 p6
             };
-            { // BSM Lockdown
+            {
+                // BSM Lockdown
                 std::thread::sleep(Duration::from_micros(350));
                 p7
             }
@@ -181,11 +189,11 @@ fn bench_full_pipeline(c: &mut Criterion) {
 fn bench_stages_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("stage_comparison");
     group.sample_size(10);
-    
+
     let context = PipelineContext {
         intent: "Swap 10 USDC for VVV".to_string(),
     };
-    
+
     group.bench_function("ram_genie", |b| {
         b.iter(|| {
             std::thread::sleep(Duration::from_micros(200));
@@ -234,7 +242,7 @@ fn bench_stages_comparison(c: &mut Criterion) {
             context.clone()
         });
     });
-    
+
     group.finish();
 }
 

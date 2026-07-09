@@ -22,9 +22,20 @@ impl Stage for FalconMcp {
         let hierarchy = if ctx.sovereign_online {
             match sovereign::agent_hierarchy(&ctx.http, &ctx.sovereign_url).await {
                 Ok(h) => {
-                    let kings = h.get("kings").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
-                    let serfs = h.get("serfs").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
-                    payload.note(self.name(), format!("live agent hierarchy: {kings} king(s), {serfs} serf(s)"));
+                    let kings = h
+                        .get("kings")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.len())
+                        .unwrap_or(0);
+                    let serfs = h
+                        .get("serfs")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.len())
+                        .unwrap_or(0);
+                    payload.note(
+                        self.name(),
+                        format!("live agent hierarchy: {kings} king(s), {serfs} serf(s)"),
+                    );
                     h
                 }
                 Err(e) => {

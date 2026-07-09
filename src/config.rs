@@ -18,13 +18,15 @@ impl Config {
     pub fn from_env() -> Result<Self> {
         Ok(Self {
             venice_api_key: env_var("VENICE_API_KEY")?,
-            venice_base_url: env_var("VENICE_BASE_URL").unwrap_or_else(|_| "https://api.venice.ai/api/v1".to_string()),
+            venice_base_url: env_var("VENICE_BASE_URL")
+                .unwrap_or_else(|_| "https://api.venice.ai/api/v1".to_string()),
             venice_model: env_var("VENICE_MODEL").unwrap_or_else(|_| "qwen-3-7-max".to_string()),
             // Resolved at runtime: from the encrypted key store (preferred) or
             // this plaintext env var as a fallback. Empty when neither is set.
             hammurabi_private_key: env_var("HAMMURABI_PRIVATE_KEY").unwrap_or_default(),
             oneshot_api_key: env_var("ONESHOT_API_KEY")?,
-            oneshot_base_url: env_var("ONESHOT_BASE_URL").unwrap_or_else(|_| "https://api.1shotapi.com/v1".to_string()),
+            oneshot_base_url: env_var("ONESHOT_BASE_URL")
+                .unwrap_or_else(|_| "https://api.1shotapi.com/v1".to_string()),
             oneshot_wallet_id: env_var("ONESHOT_WALLET_ID")?,
             base_chain_id: env_var("BASE_CHAIN_ID")
                 .ok()
@@ -35,13 +37,12 @@ impl Config {
 }
 
 fn env_var(name: &str) -> Result<String> {
-    std::env::var(name)
-        .with_context(|| format!("Environment variable {name} not set"))
+    std::env::var(name).with_context(|| format!("Environment variable {name} not set"))
 }
 
 pub fn mask(secret: &str) -> String {
     if secret.len() <= 4 {
-        format!("****{}", &secret[..])
+        format!("****{secret}")
     } else {
         format!("****{}", &secret[secret.len() - 4..])
     }
@@ -50,17 +51,17 @@ pub fn mask(secret: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_mask_short_secret() {
         assert_eq!(mask("abc"), "****abc");
     }
-    
+
     #[test]
     fn test_mask_long_secret() {
         assert_eq!(mask("verylongsecret"), "****cret");
     }
-    
+
     #[test]
     fn test_mask_medium_secret() {
         // mask() reveals the last four characters for secrets longer than four.

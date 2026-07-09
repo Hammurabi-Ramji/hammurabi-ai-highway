@@ -14,7 +14,6 @@ mod validation;
 mod venice;
 mod x402;
 
-
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use config::Config;
@@ -151,7 +150,8 @@ async fn keys_init() -> Result<()> {
         bail!("passphrases do not match");
     }
 
-    km.store_private_key(private_key.trim(), &passphrase).await?;
+    km.store_private_key(private_key.trim(), &passphrase)
+        .await?;
 
     println!(
         "✓ Encrypted signing key written to {}",
@@ -179,7 +179,10 @@ async fn run(intent: &str) -> Result<()> {
 
     let client = reqwest::Client::new();
 
-    step(&format!("Signing x402 auth and querying Venice AI ({})...", config.venice_model));
+    step(&format!(
+        "Signing x402 auth and querying Venice AI ({})...",
+        config.venice_model
+    ));
     let calldata = venice::get_calldata(&client, &config, intent).await?;
     done();
     println!("  to:    {}", calldata.to);

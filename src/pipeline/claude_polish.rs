@@ -25,8 +25,14 @@ impl Stage for ClaudePolish {
 
         if ctx.sovereign_online {
             if let Ok(metrics) = sovereign::analysis_metrics(&ctx.http, &ctx.sovereign_url).await {
-                let quality = metrics.get("average_quality_score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                payload.note(self.name(), format!("Millennium Falcon avg quality score: {quality:.1}"));
+                let quality = metrics
+                    .get("average_quality_score")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                payload.note(
+                    self.name(),
+                    format!("Millennium Falcon avg quality score: {quality:.1}"),
+                );
             }
         }
 

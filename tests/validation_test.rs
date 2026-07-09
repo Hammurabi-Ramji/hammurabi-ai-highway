@@ -1,6 +1,6 @@
 // Unit tests for validation module
 
-use hammurabi_ai_highway::validation::{CalldataVerifier, Calldata};
+use hammurabi_ai_highway::validation::{Calldata, CalldataVerifier};
 
 #[tokio::test]
 async fn test_calldata_verifier_creation() {
@@ -39,7 +39,7 @@ async fn test_verifier_high_risk() {
     let verifier = CalldataVerifier::new().unwrap();
     let calldata = Calldata {
         to: "0x4200000000000000000000000000000000000006".to_string(),
-        data: "0x".repeat(2000), // Very long data = high risk
+        data: "0x".repeat(2000),                // Very long data = high risk
         value: "0xde0b6b3a7640000".to_string(), // Large value
     };
 

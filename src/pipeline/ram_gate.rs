@@ -20,7 +20,7 @@ impl Stage for RamGate {
         // Upgrade 1: Comprehensive secret detection
         // TODO: Integrate gitleaks and trufflehog for production
         // Current: Enhanced pattern matching
-        
+
         let leak = payload.artifacts.iter().any(|a| {
             // Detect secret-like patterns
             let summary_lower = a.summary.to_lowercase();
@@ -35,8 +35,11 @@ impl Stage for RamGate {
 
         if leak {
             payload.security_verdict = Some("BLOCKED: secret-like material in artifact".into());
-            payload.note(self.name(), "egress BLOCKED — secret-like material detected");
-            
+            payload.note(
+                self.name(),
+                "egress BLOCKED — secret-like material detected",
+            );
+
             // Log security event
             eprintln!("[SECURITY] Ram Gate blocked artifact due to potential secret");
             bail!("Ram Gate blocked egress: potential secret detected");
@@ -47,14 +50,21 @@ impl Stage for RamGate {
             self.name(),
             format!(
                 "boundary authorized ({}) — payload cleared for execution",
-                if ctx.sovereign_online { "RAMGate online" } else { "RAMGate offline" }
+                if ctx.sovereign_online {
+                    "RAMGate online"
+                } else {
+                    "RAMGate offline"
+                }
             ),
         );
 
         // Upgrade 3: Risk assessment (placeholder)
         let risk_score = self.assess_artifact_risk(&payload.artifacts);
         if risk_score > 70 {
-            payload.note(self.name(), format!("WARNING: High risk score detected: {}", risk_score));
+            payload.note(
+                self.name(),
+                format!("WARNING: High risk score detected: {}", risk_score),
+            );
         }
 
         payload.security_verdict = Some("authorized".into());
@@ -113,23 +123,19 @@ mod tests {
         let gate = RamGate;
 
         // Low risk artifacts
-        let low_risk = vec![
-            Artifact {
-                path: "src/main.rs".to_string(),
-                summary: "Main application".to_string(),
-                polished: false,
-            }
-        ];
+        let low_risk = vec![Artifact {
+            path: "src/main.rs".to_string(),
+            summary: "Main application".to_string(),
+            polished: false,
+        }];
         assert!(gate.assess_artifact_risk(&low_risk) < 20);
 
         // High risk artifacts
-        let high_risk = vec![
-            Artifact {
-                path: ".env.local".to_string(),
-                summary: "Contains secrets and API keys".to_string(),
-                polished: false,
-            }
-        ];
+        let high_risk = vec![Artifact {
+            path: ".env.local".to_string(),
+            summary: "Contains secrets and API keys".to_string(),
+            polished: false,
+        }];
         assert!(gate.assess_artifact_risk(&high_risk) > 50);
     }
 }

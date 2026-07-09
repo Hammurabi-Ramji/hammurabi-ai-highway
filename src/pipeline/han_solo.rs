@@ -19,13 +19,20 @@ impl Stage for HanSolo {
 
     async fn process(&self, ctx: &PipelineContext, mut payload: Payload) -> Result<Payload> {
         if payload.cache_hit {
-            payload.note(self.name(), "build skipped — Eduba supplied a cached artifact");
+            payload.note(
+                self.name(),
+                "build skipped — Eduba supplied a cached artifact",
+            );
             return Ok(payload);
         }
 
         if ctx.sovereign_online {
-            payload.note(self.name(), "dispatching to RamGenie codegen (/api/v1/ramgenie/generate/code)...");
-            match sovereign::ramgenie_generate(&ctx.http, &ctx.sovereign_url, &payload.intent).await {
+            payload.note(
+                self.name(),
+                "dispatching to RamGenie codegen (/api/v1/ramgenie/generate/code)...",
+            );
+            match sovereign::ramgenie_generate(&ctx.http, &ctx.sovereign_url, &payload.intent).await
+            {
                 Ok(resp) => {
                     let sections = [
                         ("backend", "src/backend"),
@@ -37,7 +44,11 @@ impl Stage for HanSolo {
                     ];
                     let mut artifacts = Vec::new();
                     for (field, path) in sections {
-                        if resp.get(field).and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty()) {
+                        if resp
+                            .get(field)
+                            .and_then(|v| v.as_str())
+                            .is_some_and(|s| !s.is_empty())
+                        {
                             artifacts.push(Artifact {
                                 path: path.to_string(),
                                 summary: format!("RamGenie-generated {field}"),
@@ -45,17 +56,26 @@ impl Stage for HanSolo {
                             });
                         }
                     }
-                    let tokens = resp.get("tokens_used").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let tokens = resp
+                        .get("tokens_used")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
                     payload.note(
                         self.name(),
-                        format!("RamGenie returned {} section(s), {tokens} tokens", artifacts.len()),
+                        format!(
+                            "RamGenie returned {} section(s), {tokens} tokens",
+                            artifacts.len()
+                        ),
                     );
                     payload.build_plan = vec!["RamGenie full-stack generation".to_string()];
                     payload.artifacts = artifacts;
                     return Ok(payload);
                 }
                 Err(e) => {
-                    payload.note(self.name(), format!("RamGenie call failed ({e}) — falling back to local plan"));
+                    payload.note(
+                        self.name(),
+                        format!("RamGenie call failed ({e}) — falling back to local plan"),
+                    );
                 }
             }
         } else {

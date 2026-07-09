@@ -8,7 +8,11 @@ use crate::venice::Calldata;
 
 /// Submit calldata to 1Shot for gas-free execution on Base. Returns the
 /// resulting transaction hash.
-pub async fn execute(client: &reqwest::Client, config: &Config, calldata: &Calldata) -> Result<String> {
+pub async fn execute(
+    client: &reqwest::Client,
+    config: &Config,
+    calldata: &Calldata,
+) -> Result<String> {
     let body = json!({
         "chainId": config.base_chain_id,
         "walletId": config.oneshot_wallet_id,
