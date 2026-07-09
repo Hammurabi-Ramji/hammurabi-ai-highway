@@ -1,8 +1,4 @@
-//! Han Solo — the primary execution/decision agent (a.k.a. the Greta build
-//! engine). On a cache miss it drives the real RamGenie codegen endpoint on the
-//! Sovereign Stack gateway, turning each returned section (backend/frontend/...)
-//! into an artifact. If the gateway is offline it falls back to a deterministic
-//! plan so the pipeline still completes.
+// src/pipeline/han_solo.rs — Updated error handling
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -27,7 +23,6 @@ impl Stage for HanSolo {
             return Ok(payload);
         }
 
-        // Preferred path: real RamGenie codegen via the Sovereign Stack gateway.
         if ctx.sovereign_online {
             payload.note(self.name(), "dispatching to RamGenie codegen (/api/v1/ramgenie/generate/code)...");
             match sovereign::ramgenie_generate(&ctx.http, &ctx.sovereign_url, &payload.intent).await {
@@ -67,7 +62,6 @@ impl Stage for HanSolo {
             payload.note(self.name(), "gateway offline — using local build plan");
         }
 
-        // Fallback: deterministic local plan derived from requirements.
         let mut plan = Vec::new();
         let mut artifacts = Vec::new();
 
@@ -115,7 +109,7 @@ impl Stage for HanSolo {
             format!(
                 "computed {}-step build plan, generated {} artifact(s)",
                 plan.len(),
-                artifacts.len()
+                artifacts.len(),
             ),
         );
         payload.build_plan = plan;

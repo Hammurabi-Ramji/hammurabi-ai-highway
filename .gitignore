@@ -5,3 +5,8 @@ eduba_registry.db-*
 
 # media (host on Devpost, not in repo)
 *.mp4
+
+# stray SQLite test/runtime artifacts
+*.db
+*.db-shm
+*.db-wal

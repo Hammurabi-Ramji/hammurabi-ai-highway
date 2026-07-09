@@ -4,11 +4,18 @@
 // process; no gas is ever paid by the user.
 
 mod config;
+// TODO(crypto): deferred — see note in src/lib.rs. Does not compile against
+// pinned crate versions and is unused. Re-enable once rewritten and verified.
+// mod crypto;
+mod error;
 mod oneshot;
 mod pipeline;
+mod security;
 mod sovereign;
+mod validation;
 mod venice;
 mod x402;
+
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

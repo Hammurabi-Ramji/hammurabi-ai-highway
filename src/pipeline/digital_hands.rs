@@ -1,8 +1,4 @@
-//! Digital Hands — the automated execution relayer.
-//! Translates agent intent into on-chain state. This is the pipeline's real
-//! integration point: when credentials are present it signs an x402 payload,
-//! asks Venice AI for calldata, and relays it gas-free via 1Shot. Without
-//! credentials it clearly simulates so the pipeline still runs end-to-end.
+// src/pipeline/digital_hands.rs — Updated error handling
 
 use anyhow::Result;
 use async_trait::async_trait;

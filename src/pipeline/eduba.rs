@@ -1,14 +1,9 @@
-//! Eduba — system core & code repository manager.
-//! Performs the state check against a real local SQLite registry before any
-//! compute is spent on generation: cache HIT retrieves existing modules, cache
-//! MISS delegates to the Han Solo build agent.
+// src/pipeline/eduba.rs — Eduba cache stage with updated error handling
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use rusqlite::Connection;
 
 use crate::pipeline::{Payload, PipelineContext, Stage};
-use crate::sovereign;
 
 pub struct Eduba;
 
@@ -22,55 +17,39 @@ impl Stage for Eduba {
     }
 
     async fn process(&self, ctx: &PipelineContext, mut payload: Payload) -> Result<Payload> {
-        let conn = Connection::open(&ctx.db_path)
-            .with_context(|| format!("Eduba: failed to open registry at {}", ctx.db_path))?;
+        payload.note(self.name(), format!("intent hash: {}", payload.intent_hash));
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS code_registry (
-                intent_hash TEXT PRIMARY KEY,
-                intent      TEXT NOT NULL,
-                artifact    TEXT NOT NULL,
-                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-            )",
-            [],
-        )
-        .context("Eduba: failed to ensure code_registry table")?;
+        // Check cache in Eduba registry. The registry is a binary SQLite file,
+        // so probe for existence with a filesystem check (a UTF-8 read would
+        // always fail on binary content) and treat any open/query error — such
+        // as a missing table on a brand-new database — as a cache miss.
+        let result = if std::path::Path::new(&ctx.db_path).exists() {
+            match rusqlite::Connection::open(&ctx.db_path) {
+                Ok(conn) => conn
+                    .query_row(
+                        "SELECT artifact FROM code_registry WHERE intent_hash = ?1",
+                        [&payload.intent_hash],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .ok(),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
 
-        let hit: Option<String> = conn
-            .query_row(
-                "SELECT artifact FROM code_registry WHERE intent_hash = ?1",
-                [&payload.intent_hash],
-                |row| row.get(0),
-            )
-            .ok();
-
-        match hit {
+        match result {
             Some(artifact) => {
                 payload.cache_hit = true;
-                payload.note(
-                    self.name(),
-                    format!("cache HIT for {} — retrieving existing modules", payload.intent_hash),
-                );
-                payload.retrieved = Some(artifact);
+                payload.retrieved = Some(artifact.clone());
+                payload.note(self.name(), format!("cache HIT — artifact: {}", artifact));
             }
             None => {
-                payload.note(
-                    self.name(),
-                    format!(
-                        "cache MISS for {} — delegating to Han Solo build agent",
-                        payload.intent_hash
-                    ),
-                );
+                payload.cache_hit = false;
+                payload.note(self.name(), "cache MISS — proceeding to build");
             }
         }
 
-        // Cross-reference the gateway's Millennium Falcon project registry.
-        if ctx.sovereign_online {
-            if let Ok(projects) = sovereign::list_projects(&ctx.http, &ctx.sovereign_url).await {
-                let count = projects.as_array().map(|a| a.len()).unwrap_or(0);
-                payload.note(self.name(), format!("gateway reports {count} indexed project(s)"));
-            }
-        }
         Ok(payload)
     }
 }

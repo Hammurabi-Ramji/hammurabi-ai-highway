@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::config::Config;
-use crate::x402::X402Auth;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Calldata {
@@ -39,14 +38,16 @@ pub async fn get_calldata(client: &reqwest::Client, config: &Config, intent: &st
     });
     let body_str = body.to_string();
 
-    let auth = X402Auth::sign(&config.hammurabi_private_key, &body_str).await?;
+    // Use x402 v2 for enhanced security with rate limiting
+    let auth = crate::security::X402AuthV2::new(&config.hammurabi_private_key).await?;
+    let signed = auth.sign(&body_str).await?;
 
     let mut request = client
         .post(format!("{}/chat/completions", config.venice_base_url))
         .bearer_auth(&config.venice_api_key)
         .header("Content-Type", "application/json");
 
-    for (name, value) in auth.headers() {
+    for (name, value) in signed.headers() {
         request = request.header(name, value);
     }
 

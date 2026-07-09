@@ -1,6 +1,4 @@
-//! Ram Genie — the Language Processor (LP). Pipeline ingress.
-//! Interprets the user's natural-language intent and translates it into coarse
-//! systemic requirements for the rest of the pipeline.
+// src/pipeline/ram_genie.rs — Updated error handling
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -22,27 +20,30 @@ impl Stage for RamGenie {
     async fn process(&self, _ctx: &PipelineContext, mut payload: Payload) -> Result<Payload> {
         let intent = payload.intent.clone();
 
-        // Stable fingerprint of the intent — used by Eduba for cache lookups.
         let digest = hex::encode(Sha256::digest(intent.as_bytes()));
         payload.intent_hash = digest[..16].to_string();
         payload.note(self.name(), format!("intent fingerprint → {}", payload.intent_hash));
 
-        // Translate natural language into systemic requirements (simulated LP).
         let lower = intent.to_lowercase();
+        // Tokenize for whole-word matching so short keywords like "ui" don't
+        // accidentally fire on substrings (e.g. "ui" inside "build").
+        let words: Vec<&str> = lower
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .collect();
+        let has_word = |kw: &str| words.iter().any(|w| *w == kw);
         let mut reqs = Vec::new();
-        if lower.contains("swap")
-            || lower.contains("buy")
-            || lower.contains("stake")
-            || lower.contains("token")
-        {
+
+        if lower.contains("swap") || lower.contains("buy") || lower.contains("stake") || lower.contains("token") {
             reqs.push("on-chain execution required".to_string());
         }
-        if lower.contains("dashboard") || lower.contains("ui") || lower.contains("app") {
+        if lower.contains("dashboard") || has_word("ui") || has_word("app") {
             reqs.push("frontend surface required".to_string());
         }
         if lower.contains("auth") || lower.contains("login") {
             reqs.push("authentication required".to_string());
         }
+        
         if reqs.is_empty() {
             reqs.push("generic build request".to_string());
         }

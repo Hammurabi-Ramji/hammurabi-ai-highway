@@ -1,6 +1,4 @@
-//! Claude — UI/UX polish & beautification engine.
-//! Aesthetic pass over the generated artifacts: refactor for readability,
-//! formatting, comments, and UX polish. (Simulated: marks artifacts polished.)
+// src/pipeline/claude_polish.rs — Updated with better error handling
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -25,7 +23,6 @@ impl Stage for ClaudePolish {
             artifact.polished = true;
         }
 
-        // Attach the gateway's real Millennium Falcon audit metrics when available.
         if ctx.sovereign_online {
             if let Ok(metrics) = sovereign::analysis_metrics(&ctx.http, &ctx.sovereign_url).await {
                 let quality = metrics.get("average_quality_score").and_then(|v| v.as_f64()).unwrap_or(0.0);

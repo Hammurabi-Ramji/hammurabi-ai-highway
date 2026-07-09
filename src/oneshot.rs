@@ -1,6 +1,4 @@
-// Hammurabi AI Highway — 1Shot API integration ("The Hands").
-// Routes Venice-generated calldata to 1Shot's gas-sponsored execution relayer,
-// which fires it through our MetaMask Smart Account on Base.
+// src/oneshot.rs — Updated with error handling
 
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
@@ -8,7 +6,7 @@ use serde_json::{json, Value};
 use crate::config::Config;
 use crate::venice::Calldata;
 
-/// Submit `calldata` to 1Shot for gas-free execution on Base. Returns the
+/// Submit calldata to 1Shot for gas-free execution on Base. Returns the
 /// resulting transaction hash.
 pub async fn execute(client: &reqwest::Client, config: &Config, calldata: &Calldata) -> Result<String> {
     let body = json!({

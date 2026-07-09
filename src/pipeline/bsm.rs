@@ -1,7 +1,4 @@
-//! BSM — final code processing, integration & lockdown.
-//! The terminal stage: persists freshly-built artifacts into Eduba's registry
-//! (so an identical future intent becomes a cache hit) and composes the final
-//! result summary returned to the CLI.
+// src/pipeline/bsm.rs — Updated error handling
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -22,7 +19,6 @@ impl Stage for Bsm {
     }
 
     async fn process(&self, ctx: &PipelineContext, mut payload: Payload) -> Result<Payload> {
-        // Lock newly-built work into the registry. (Skip when it was a cache hit.)
         if !payload.cache_hit && !payload.artifacts.is_empty() {
             let artifact_summary = payload
                 .artifacts
@@ -33,6 +29,18 @@ impl Stage for Bsm {
 
             let conn = Connection::open(&ctx.db_path)
                 .with_context(|| format!("BSM: failed to open registry at {}", ctx.db_path))?;
+            // Ensure the registry table exists — BSM may be the first stage to
+            // touch a fresh database (Eduba only reads), so it owns creation.
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS code_registry (
+                    intent_hash TEXT PRIMARY KEY,
+                    intent TEXT NOT NULL,
+                    artifact TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )",
+                [],
+            )
+            .context("BSM: failed to ensure registry table exists")?;
             conn.execute(
                 "INSERT OR REPLACE INTO code_registry (intent_hash, intent, artifact)
                  VALUES (?1, ?2, ?3)",
@@ -42,7 +50,6 @@ impl Stage for Bsm {
 
             payload.note(self.name(), "artifact locked into Eduba registry (future runs = cache hit)");
 
-            // Also register the project in the gateway's RamGenie registry.
             if ctx.sovereign_online {
                 let name = format!("hammurabi-{}", payload.intent_hash);
                 match sovereign::create_ramgenie_project(&ctx.http, &ctx.sovereign_url, &name).await {

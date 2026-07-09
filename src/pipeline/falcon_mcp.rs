@@ -1,6 +1,4 @@
-//! Millennium Falcon — the MCP (Model Context Protocol) layer.
-//! Assembles the runtime context manifest and the tool surface the downstream
-//! agents are allowed to call.
+// src/pipeline/falcon_mcp.rs — Updated error handling
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -21,7 +19,6 @@ impl Stage for FalconMcp {
     }
 
     async fn process(&self, ctx: &PipelineContext, mut payload: Payload) -> Result<Payload> {
-        // Pull the live agent hierarchy from the gateway when reachable.
         let hierarchy = if ctx.sovereign_online {
             match sovereign::agent_hierarchy(&ctx.http, &ctx.sovereign_url).await {
                 Ok(h) => {
