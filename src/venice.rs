@@ -1,13 +1,12 @@
 // Hammurabi AI Highway — Venice AI integration ("The Brain").
 // Translates a natural-language intent into raw Base-network calldata using
-// Venice's qwen-2.5-coder-32b model, authenticated via x402.
+// Venice's qwen-3-7-max model, authenticated via x402.
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::config::Config;
-use crate::x402::X402Auth;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Calldata {
@@ -28,7 +27,11 @@ single-line JSON object containing the raw transaction fields needed to execute 
 Do not include any explanation, markdown formatting, or additional fields. Return raw JSON only."#;
 
 /// Ask Venice AI to translate `intent` into `{to, data, value}` calldata.
-pub async fn get_calldata(client: &reqwest::Client, config: &Config, intent: &str) -> Result<Calldata> {
+pub async fn get_calldata(
+    client: &reqwest::Client,
+    config: &Config,
+    intent: &str,
+) -> Result<Calldata> {
     let body = json!({
         "model": config.venice_model,
         "messages": [
@@ -39,14 +42,16 @@ pub async fn get_calldata(client: &reqwest::Client, config: &Config, intent: &st
     });
     let body_str = body.to_string();
 
-    let auth = X402Auth::sign(&config.hammurabi_private_key, &body_str).await?;
+    // Use x402 v2 for enhanced security with rate limiting
+    let auth = crate::security::X402AuthV2::new(&config.hammurabi_private_key).await?;
+    let signed = auth.sign(&body_str).await?;
 
     let mut request = client
         .post(format!("{}/chat/completions", config.venice_base_url))
         .bearer_auth(&config.venice_api_key)
         .header("Content-Type", "application/json");
 
-    for (name, value) in auth.headers() {
+    for (name, value) in signed.headers() {
         request = request.header(name, value);
     }
 
@@ -84,6 +89,7 @@ fn parse_calldata(content: &str) -> Result<Calldata> {
         .trim_end_matches("```")
         .trim();
 
-    serde_json::from_str(cleaned)
-        .with_context(|| format!("Failed to parse calldata JSON from Venice AI response:\n{cleaned}"))
+    serde_json::from_str(cleaned).with_context(|| {
+        format!("Failed to parse calldata JSON from Venice AI response:\n{cleaned}")
+    })
 }

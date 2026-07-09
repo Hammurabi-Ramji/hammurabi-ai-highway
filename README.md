@@ -1,139 +1,151 @@
-# Hammurabi AI Highway CLI
+# Hammurabi AI Highway — v0.1.0
 
-A sovereign, decentralized automation tool built in Rust that abstracts away
-Web3 complexity entirely. Users execute complex on-chain actions — swaps,
-buys, staking — using plain natural language, with no private key exposure
-and no gas fees.
+A sovereign, Rust-native CLI that turns plain-English intent into gas-free
+on-chain execution on Base, and orchestrates an 8-stage autonomous pipeline
+across a local AI gateway.
 
-## Architecture
+> **Status: early-stage / hackathon submission.** The crate builds cleanly and
+> the full test suite passes, but this is not production-hardened software.
+> Some modules (see [Project status](#-project-status)) are scaffolding that is
+> not yet wired into the live path. See [SUBMISSION.md](SUBMISSION.md) for the
+> hackathon write-up.
 
-- **Language:** Rust (`tokio`, `clap`, `reqwest`, `ethers-core`/`ethers-signers`, `serde_json`, `dotenvy`)
-- **Network:** Base (EVM, chainId 8453)
-- **The Brain — Venice AI:** translates natural-language intent into raw
-  smart-contract calldata using the `qwen-2.5-coder-32b` model, authenticated
-  via **x402** (a timestamped payload signed with our local EVM wallet,
-  passed as `X-402-*` headers).
-- **The Hands — 1Shot API:** takes the calldata from Venice and executes it
-  through our MetaMask Smart Account on Base as a **gas-sponsored**
-  transaction — the end user never pays gas or signs anything.
+---
 
-## Business logic
+## 🚀 What it does
 
-When a customer pays to use the Hammurabi platform in USDC, this CLI:
+You type an intent in natural language. The system:
 
-1. Swaps the inbound USDC into the platform's native token (**VVV**) via
-   Venice + 1Shot.
-2. Stakes that VVV to secure daily compute bandwidth (**DIEM**).
+1. Signs an **x402** auth payload with a local EVM wallet (sovereign, key-based auth).
+2. Asks **Venice AI** to translate the intent into raw EVM calldata.
+3. Relays that calldata through the **1Shot API** to a **MetaMask Smart Account**
+   on **Base**, executing it **gas-free** (sponsored relay).
+4. Returns the transaction hash to the terminal.
 
-All of this happens via simple CLI commands, with the smart account and
-1Shot relayer handling custody and gas.
+There is also an 8-stage orchestration pipeline that wires the CLI into a local
+AI gateway (the Sovereign Stack server). Offline stages degrade gracefully.
 
-## Execution flow
+---
 
+## 🛠 Installation & build
+
+```bash
+git clone <your-repo-url>
+cd HammurabiAIHighway
+
+cp .env.example .env        # fill in credentials (see below)
+
+cargo build                 # development
+cargo build --release       # production build
 ```
+
+### Required environment (`.env`)
+
+| Variable | Purpose |
+|----------|---------|
+| `VENICE_API_KEY` | Venice AI API key |
+| `HAMMURABI_PRIVATE_KEY` | local EVM wallet key used for x402 signing |
+| `ONESHOT_API_KEY`, `ONESHOT_WALLET_ID` | 1Shot relay credentials |
+
+Without credentials the CLI still runs the pipeline; Digital Hands simulates the
+on-chain step and says so.
+
+---
+
+## ▶️ Run
+
+```bash
+# Single on-chain intent
 cargo run -- run --intent "Swap 10 USDC for VVV"
-```
 
-1. The CLI signs an x402 auth payload with `HAMMURABI_PRIVATE_KEY`.
-2. It calls Venice AI, requesting only raw `{to, data, value}` calldata for
-   the described Base-network action.
-3. It forwards that calldata to the 1Shot API execute endpoint.
-4. 1Shot routes the transaction through the smart account, pays the gas, and
-   returns the transaction hash, which is printed to the terminal along with
-   a BaseScan link.
-
-## Autonomous Pipeline (the AI Highway)
-
-Beyond the single-shot `run` command, `hammurabi pipeline` drives an intent
-through a full sequence of agentic stages — the "AI Highway" orchestration.
-The runtime that drives them is the **Yuduva System**. Two naming vocabularies
-map onto the same eight stages:
-
-Every stage is wired to a **real backend** — the [Sovereign Stack server](../Sovereign%20Stack/output/sovereign-stack)
-(the RAMGate gateway, default `http://127.0.0.1:3000`) which hosts Millennium
-Falcon, the Han Solo / AI-Highway agents, and RamGenie — plus a local SQLite
-registry and the Venice+1Shot on-chain relayer. When the gateway is offline,
-each stage degrades gracefully and says so, so the pipeline always completes.
-
-| Stage              | Real backend call                                              | What it does |
-|--------------------|----------------------------------------------------------------|--------------|
-| `ram_genie`        | local NL parse + SHA-256 fingerprint                           | ingress / intent → requirements |
-| `falcon_mcp`       | `GET /api/agents/hierarchy`                                    | live agent hierarchy into MCP context |
-| `eduba`            | local SQLite registry + `GET /api/projects`                   | cache HIT/MISS + remote project state |
-| `han_solo`         | `POST /api/v1/ramgenie/generate/code`                         | **real RamGenie codegen** → artifacts |
-| `ram_gate`         | gateway health + egress secret-scan                           | security boundary |
-| `claude_polish`    | `GET /api/analyze/metrics/summary`                            | Millennium Falcon audit metrics |
-| `digital_hands`    | Venice AI `x402` + 1Shot relay                                | gasless on-chain execution |
-| `bsm`              | local SQLite lockdown + `POST /api/v1/ramgenie/projects`     | finalize + register project |
-
-Flow: **Ram Genie** parses intent → **Millennium Falcon** pulls the live agent
-hierarchy → **Eduba** checks its SQLite registry + the gateway's project list →
-**Han Solo** calls RamGenie codegen → **Ram Gate** authorizes → **Claude**
-attaches audit metrics → **Digital Hands** relays on-chain → **BSM** locks the
-artifact in and registers the project.
-
-```sh
-# 1. start the real gateway (separate terminal), then:
+# Full 8-stage orchestration pipeline
 cargo run -- pipeline --intent "Build a task dashboard with auth"
-# Set SOVEREIGN_API_URL to point at a non-default gateway address.
 ```
 
-> The gateway codegen (RamGenie) requires Ollama running at `localhost:11434`.
-> Without the gateway, the pipeline still runs end-to-end using local fallbacks
-> (Han Solo's deterministic plan, the SQLite registry, the simulated relay) and
-> labels every degraded stage explicitly.
+---
 
-## Technical Integration Details
+## 🧩 The pipeline
 
-The on-chain layer uses a hardened integration for autonomous execution. The
-fields below document **exactly what the binary sends** (see
-[x402.rs](src/x402.rs) and [oneshot.rs](src/oneshot.rs)).
+Each stage is a real Rust module (`src/pipeline/`) wired to a real backend;
+offline stages degrade gracefully.
 
-### 1. Authentication Layer (x402 protocol)
+| Stage | Role |
+|-------|------|
+| Ram Genie | NL parse + SHA-256 intent fingerprint |
+| Millennium Falcon | live agent hierarchy from the gateway |
+| Eduba | SQLite registry cache (hit/miss) |
+| Han Solo | codegen (gateway RamGenie, or local build plan offline) |
+| Ram Gate | gateway health + egress secret-scan |
+| Claude | audit metrics |
+| Digital Hands | Venice x402 + 1Shot relay (real on `run`) |
+| BSM | SQLite lockdown + gateway project registration |
 
-Venice AI requests are authenticated with a timestamped, wallet-signed payload.
-The signature is bound to the request body and the current timestamp (the local
-EVM wallet signs `"{timestamp}.{body}"`), and is sent as **three** headers:
+---
 
-- `X-402-Address` — checksummed address of the local sovereign wallet
-- `X-402-Timestamp` — unix timestamp the signature is bound to
-- `X-402-Signature` — `0x`-prefixed ECDSA (EIP-191 personal_sign) signature
+## 🧪 Testing
 
-`POST https://api.venice.ai/api/v1/chat/completions` · model `qwen-2.5-coder-32b`.
-
-### 2. 1Shot relayer payload
-
-`digital_hands.rs` calls `POST https://api.1shotapi.com/v1/execute` (Bearer auth)
-with this exact JSON body:
-
-- `to` — target smart-contract address (from Venice calldata)
-- `data` — hexadecimal calldata (dynamically generated via Venice AI)
-- `value` — transaction value (default `0x0` for relay operations)
-- `chainId` — `8453` (Base Mainnet)
-- `walletId` — identifier for the delegated MetaMask Smart Account
-
-The response's `transactionHash` / `txHash` / `hash` is surfaced to the terminal.
-
-## Setup
-
-```sh
-cp .env.example .env
-# fill in VENICE_API_KEY, HAMMURABI_PRIVATE_KEY, ONESHOT_API_KEY, ONESHOT_WALLET_ID
-cargo build
-cargo run -- run --intent "Swap 10 USDC for VVV"
+```bash
+cargo test                              # everything
+cargo test --lib                        # unit tests
+cargo test --test integration_test      # full-pipeline integration
+cargo test --test validation_test       # calldata verifier
+cargo test --test error_test            # error taxonomy
 ```
 
-## Security & Integrity Layer
+**Current state:** 52 tests across unit, integration, and validation suites —
+all passing. Coverage is meaningful for the pipeline stages, the SQLite cache,
+the calldata verifier, and the error taxonomy; it is **not** yet comprehensive.
 
-The Sovereign Stack employs a tiered security posture:
+---
 
-- **Artifact egress scanning** — the `Ram Gate` stage scans generated artifacts
-  at stage 5 for secret-like material before the pipeline proceeds to execution.
-- **Execution integrity** — all Venice AI compute requests carry the
-  cryptographic `X-402-*` headers above, ensuring authenticated execution.
-- **Transactional trust** — 1Shot's gasless relay routes calldata through a
-  verified MetaMask Smart Account, keeping on-chain boundaries intact.
-- **Secret hygiene** — all secrets are read from `.env` (gitignored) via
-  `dotenvy`, never hardcoded, and masked to their last 4 characters in logs.
-  `HAMMURABI_PRIVATE_KEY` only signs x402 auth payloads — it never signs or
-  broadcasts on-chain transactions; 1Shot's smart-account custody does that.
+## 📚 Documentation
+
+~1,400 lines of guides live in [`docs/`](docs/):
+
+- [Architecture](docs/01_architecture.md)
+- [Security guide](docs/02_security_guide.md)
+- [Deployment](docs/03_deployment.md)
+- [Troubleshooting](docs/04_troubleshooting.md)
+- [Performance](docs/05_performance.md)
+
+> Note: the performance guide and the `benches/` benchmarks are **illustrative**.
+> The current benchmark harness simulates stage timings with fixed sleeps rather
+> than measuring the real implementations — treat the numbers as targets, not
+> measurements.
+
+---
+
+## 📊 Project status
+
+Honest snapshot of what is wired in versus aspirational:
+
+| Area | Status |
+|------|--------|
+| CLI + 8-stage pipeline | ✅ working, tested |
+| Venice AI → 1Shot relay on Base | ✅ real on `run` (needs credentials) |
+| x402 request signing | ✅ used on the live Venice path (`security::x402_v2`) |
+| SQLite intent cache (Eduba/BSM) | ✅ working, tested |
+| Calldata verifier (`src/validation`) | ⚠️ standalone + tested, **not yet wired** into the on-chain path |
+| Performance metrics (`src/metrics`) | ⚠️ implemented + tested, **not yet wired** |
+| Typed error taxonomy (`src/error`) | ⚠️ present; live pipeline currently uses `anyhow` |
+| Encrypted key management (`src/crypto`) | ⛔ **deferred** — does not build against pinned crates; commented out |
+| Benchmarks (`benches/`) | ⚠️ simulated timings, not real measurements |
+
+---
+
+## 🗺 Roadmap
+
+- Wire the calldata verifier into the Digital Hands relay path.
+- Rewrite and re-enable the `crypto` key-management module against its actual
+  crate APIs, then integrate encrypted key storage.
+- Consolidate the two x402 signers (`x402` and `security::x402_v2`).
+- Replace simulated benchmarks with real measurements.
+- Redis-based replay protection; multi-chain support.
+
+---
+
+## 📄 License / attribution
+
+See [SUBMISSION.md](SUBMISSION.md) for the hackathon submission details.
+
+*Champions Have No Master.*

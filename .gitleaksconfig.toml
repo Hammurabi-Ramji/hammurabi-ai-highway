@@ -1,0 +1,89 @@
+# Gitleaks configuration for Hammurabi AI Highway
+# Prevents secrets (API keys, private keys) from being committed
+# Run with: gitleaks detect --config .gitleaksconfig.toml
+
+title = "Hammurabi gitleaks config"
+version = "1.0.0"
+
+# Entropy-based detection
+[[rules]]
+id = "ethereum-private-key"
+description = "Detects Ethereum private keys (0x...)"
+regex = '''(?i)0x[0-9a-f]{64}(?![0-9a-f])'''
+keywords = ["private_key", "privatekey", "pk"]
+entropy = 3.5
+
+[[rules]]
+id = "api-key-generic"
+description = "Detects generic API keys"
+regex = '''(?i)[a-z0-9_-]{20,}[=:][ ]?[a-z0-9_-]{20,}'''
+keywords = ["api_key", "apikey", "api-key", "token", "secret"]
+entropy = 4.0
+
+[[rules]]
+id = "venice-api-key"
+description = "Detects Venice AI API key (VENICE_)"
+regex = '''VENICE_[A-Za-z0-9_-]{40,}'''
+keywords = ["venice"]
+entropy = 3.0
+
+[[rules]]
+id = "oneshot-api-key"
+description = "Detects 1Shot API key (ONESHOT_)"
+regex = '''ONESHOT_[A-Za-z0-9_-]{40,}'''
+keywords = ["oneshot"]
+entropy = 3.0
+
+[[rules]]
+id = "jwt-token"
+description = "Detects JWT tokens"
+regex = '''eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.?[A-Za-z0-9_-]*'''
+keywords = ["jwt", "token", "bearer"]
+entropy = 3.5
+
+[[rules]]
+id = "github-token"
+description = "Detects GitHub tokens"
+regex = '''ghp_[A-Za-z0-9_]{36,}'''
+keywords = ["github", "token"]
+entropy = 3.0
+
+[[rules]]
+id = "aws-secret"
+description = "Detects AWS secret access key"
+regex = '''(?i)aws_secret_access_key[ ]?=[ ]?[A-Za-z0-9/+=]{40}'''
+keywords = ["aws"]
+entropy = 3.5
+
+# Exclude patterns (false positives)
+[[rules.allowlist]]
+# Allow test fixtures
+paths = [
+  "(?i)test.*",
+  "(?i).*_test\\.rs$",
+  "(?i)examples/.*",
+  "(?i)\\.env\\.example$",
+  "(?i)docs/.*",
+]
+
+[allowlist]
+# Paths to skip entirely
+paths = [
+  "(?i)target/.*",
+  "(?i)\\.git/.*",
+  "(?i)node_modules/.*",
+  "(?i)\\.env\\.example$",
+  "(?i)Cargo\\.lock$",
+]
+
+# Commits to ignore (if secrets were accidentally committed in past)
+commits = []
+
+# Branches to scan (default: all)
+branches = ["main", "develop"]
+
+# Verbosity level: DEBUG, INFO, WARN, ERROR
+verbosity = "INFO"
+
+# Maximum workers for parallel scanning
+max_workers = 4

@@ -1,8 +1,8 @@
-// Hammurabi AI Highway — environment configuration.
-// All secrets are loaded from `.env` (gitignored) — never hardcoded.
+// src/config.rs — Updated config with error handling
 
 use anyhow::{Context, Result};
 
+#[derive(Debug, Clone)]
 pub struct Config {
     pub venice_api_key: String,
     pub venice_base_url: String,
@@ -16,39 +16,55 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Self> {
-        // Load .env if present; ignore if missing (env vars may be set another way).
-        dotenvy::dotenv().ok();
-
         Ok(Self {
             venice_api_key: env_var("VENICE_API_KEY")?,
-            venice_base_url: env_var_or(
-                "VENICE_BASE_URL",
-                "https://api.venice.ai/api/v1",
-            ),
-            venice_model: env_var_or("VENICE_MODEL", "qwen-2.5-coder-32b"),
-            hammurabi_private_key: env_var("HAMMURABI_PRIVATE_KEY")?,
+            venice_base_url: env_var("VENICE_BASE_URL")
+                .unwrap_or_else(|_| "https://api.venice.ai/api/v1".to_string()),
+            venice_model: env_var("VENICE_MODEL").unwrap_or_else(|_| "qwen-3-7-max".to_string()),
+            // Resolved at runtime: from the encrypted key store (preferred) or
+            // this plaintext env var as a fallback. Empty when neither is set.
+            hammurabi_private_key: env_var("HAMMURABI_PRIVATE_KEY").unwrap_or_default(),
             oneshot_api_key: env_var("ONESHOT_API_KEY")?,
-            oneshot_base_url: env_var_or("ONESHOT_BASE_URL", "https://api.1shotapi.com/v1"),
+            oneshot_base_url: env_var("ONESHOT_BASE_URL")
+                .unwrap_or_else(|_| "https://api.1shotapi.com/v1".to_string()),
             oneshot_wallet_id: env_var("ONESHOT_WALLET_ID")?,
-            base_chain_id: 8453,
+            base_chain_id: env_var("BASE_CHAIN_ID")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(8453), // Base mainnet
         })
     }
 }
 
-fn env_var(key: &str) -> Result<String> {
-    std::env::var(key)
-        .with_context(|| format!("Missing required env var `{key}` — see .env.example"))
+fn env_var(name: &str) -> Result<String> {
+    std::env::var(name).with_context(|| format!("Environment variable {name} not set"))
 }
 
-fn env_var_or(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_string())
-}
-
-/// Mask a secret for safe printing — keep only the last 4 characters.
 pub fn mask(secret: &str) -> String {
     if secret.len() <= 4 {
-        "****".to_string()
+        format!("****{secret}")
     } else {
         format!("****{}", &secret[secret.len() - 4..])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mask_short_secret() {
+        assert_eq!(mask("abc"), "****abc");
+    }
+
+    #[test]
+    fn test_mask_long_secret() {
+        assert_eq!(mask("verylongsecret"), "****cret");
+    }
+
+    #[test]
+    fn test_mask_medium_secret() {
+        // mask() reveals the last four characters for secrets longer than four.
+        assert_eq!(mask("secret"), "****cret");
     }
 }

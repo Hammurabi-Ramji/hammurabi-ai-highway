@@ -23,3 +23,17 @@ chrono = "0.4"
 async-trait = "0.1"
 sha2 = "0.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror = "1"
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+rpassword = "7"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
+criterion = "0.5"
+
+[[bench]]
+name = "pipeline_stages"
+harness = false

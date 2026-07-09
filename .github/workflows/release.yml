@@ -1,0 +1,154 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Build release binaries for all platforms
+  build:
+    name: Build Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            use_cross: false
+            artifact_name: hammurabi
+            asset_name: hammurabi-linux-x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use_cross: true
+            artifact_name: hammurabi
+            asset_name: hammurabi-linux-musl-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            use_cross: false
+            artifact_name: hammurabi
+            asset_name: hammurabi-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            use_cross: false
+            artifact_name: hammurabi
+            asset_name: hammurabi-macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use_cross: false
+            artifact_name: hammurabi.exe
+            asset_name: hammurabi-windows-x86_64.exe
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross
+      
+      - name: Build release
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+        shell: bash
+      
+      - name: Create checksum
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            certUtil -hashfile "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" SHA256 > ${{ matrix.asset_name }}.sha256
+          else
+            shasum -a 256 "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" > ${{ matrix.asset_name }}.sha256
+          fi
+        shell: bash
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: |
+            target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+            ${{ matrix.asset_name }}.sha256
+          retention-days: 1
+
+  # Generate SBOM (Software Bill of Materials)
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-sbom
+        run: cargo install cargo-sbom
+      
+      - name: Generate SBOM
+        run: cargo sbom > sbom.json
+      
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 1
+
+  # Create GitHub release with all binaries
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build, sbom]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -type f -not -name '.gitkeep' -exec cp {} release/ \;
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload to GitHub Container Registry
+        if: contains(github.ref, 'v')
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+          docker build -t ghcr.io/${{ github.repository }}:${GITHUB_REF#refs/tags/} .
+          docker push ghcr.io/${{ github.repository }}:${GITHUB_REF#refs/tags/}
+
+  # Publish crate to crates.io
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: contains(github.ref, 'v')
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Publish
+        run: cargo publish --token ${{ secrets.CARGO_TOKEN }}

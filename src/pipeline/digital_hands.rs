@@ -1,8 +1,4 @@
-//! Digital Hands — the automated execution relayer.
-//! Translates agent intent into on-chain state. This is the pipeline's real
-//! integration point: when credentials are present it signs an x402 payload,
-//! asks Venice AI for calldata, and relays it gas-free via 1Shot. Without
-//! credentials it clearly simulates so the pipeline still runs end-to-end.
+// src/pipeline/digital_hands.rs — Updated error handling
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -29,13 +25,19 @@ impl Stage for DigitalHands {
             .any(|r| r == "on-chain execution required");
 
         if !needs_onchain {
-            payload.note(self.name(), "no on-chain action in intent — relayer skipped");
+            payload.note(
+                self.name(),
+                "no on-chain action in intent — relayer skipped",
+            );
             return Ok(payload);
         }
 
         match &ctx.config {
             Some(config) => {
-                payload.note(self.name(), "signing x402 + requesting calldata from Venice AI...");
+                payload.note(
+                    self.name(),
+                    "signing x402 + requesting calldata from Venice AI...",
+                );
                 let calldata = venice::get_calldata(&ctx.http, config, &payload.intent).await?;
                 payload.note(self.name(), format!("calldata target {}", calldata.to));
                 let tx = oneshot::execute(&ctx.http, config, &calldata).await?;

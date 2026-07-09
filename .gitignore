@@ -2,3 +2,15 @@
 .env
 eduba_registry.db
 eduba_registry.db-*
+
+# media (host on Devpost, not in repo)
+*.mp4
+
+# stray SQLite test/runtime artifacts
+*.db
+*.db-shm
+*.db-wal
+
+# encrypted key store (never commit)
+hammurabi_keys/
+*.enc

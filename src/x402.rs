@@ -1,6 +1,11 @@
 // Hammurabi AI Highway — x402 cryptographic auth.
 // Signs a timestamped request body with the local EVM wallet (EIP-191 personal_sign)
 // so Venice AI can verify the request originated from our sovereign identity.
+//
+// NOTE: the live Venice path now signs via `security::x402_v2::X402AuthV2`
+// (adds rate limiting). This original signer is retained as the reference
+// implementation; it is intentionally unused pending consolidation.
+#![allow(dead_code)]
 
 use anyhow::{Context, Result};
 use ethers_core::utils::to_checksum;

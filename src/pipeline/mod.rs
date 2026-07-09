@@ -1,30 +1,9 @@
+// src/pipeline/mod.rs — Updated with default PipelineContext
+
 //! Hammurabi AI Highway — autonomous orchestration pipeline.
-//!
-//! This module is the "Eduba System" runtime: the core platform that drives a
-//! user intent through a fixed sequence of agentic stages. Each stage is a
-//! small, self-contained module implementing the [`Stage`] trait. The two
-//! design vocabularies the project uses map onto these stages as follows:
-//!
-//! | Stage module       | Star-Wars name      | Architecture-doc name   | Role                          |
-//! |--------------------|---------------------|-------------------------|-------------------------------|
-//! | `ram_genie`        | Ram Genie           | Ram Genie (LP)          | ingress / NL intent parsing   |
-//! | `falcon_mcp`       | Millennium Falcon   | (MCP layer)             | context & protocol assembly   |
-//! | `eduba`            | (—)                 | Eduba                   | state check / SQLite registry |
-//! | `han_solo`         | Han Solo            | Greta                   | decision / build agent        |
-//! | `ram_gate`         | Ram Gate            | (—)                     | security gateway              |
-//! | `claude_polish`    | (—)                 | Claude                  | UI/UX polish                  |
-//! | `digital_hands`    | Digital Hands       | (—)                     | execution relayer (real)      |
-//! | `bsm`              | (—)                 | BSM                     | finalize / lockdown           |
-//!
-//! Stages that have a real backend (Eduba's SQLite registry, Digital Hands'
-//! Venice+1Shot relay) do real work; the decision/codegen stages run honest
-//! deterministic simulations so the pipeline executes end-to-end without
-//! pretending to be a finished backend.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
-
-use crate::config::Config;
 
 pub mod bsm;
 pub mod claude_polish;
@@ -35,6 +14,17 @@ pub mod han_solo;
 pub mod ram_gate;
 pub mod ram_genie;
 
+#[cfg(test)]
+pub mod bsm_test;
+#[cfg(test)]
+pub mod digital_hands_test;
+#[cfg(test)]
+pub mod eduba_test;
+#[cfg(test)]
+pub mod han_solo_test;
+#[cfg(test)]
+pub mod ram_genie_test;
+
 /// A unit of generated work passing through the pipeline.
 #[derive(Debug, Clone)]
 pub struct Artifact {
@@ -43,8 +33,7 @@ pub struct Artifact {
     pub polished: bool,
 }
 
-/// The payload threaded through every stage. Each stage reads what it needs
-/// and appends its own contribution.
+/// The payload threaded through every stage.
 #[derive(Debug, Default, Clone)]
 pub struct Payload {
     pub intent: String,
@@ -70,7 +59,6 @@ impl Payload {
         }
     }
 
-    /// Record (and print) a line of progress attributed to a stage.
     pub fn note(&mut self, stage: &str, msg: impl Into<String>) {
         let line = format!("[{stage}] {}", msg.into());
         println!("  {line}");
@@ -78,18 +66,25 @@ impl Payload {
     }
 }
 
-/// Shared runtime context ("Eduba System" environment) handed to every stage.
+/// Shared runtime context.
 pub struct PipelineContext {
-    /// Loaded credentials, or `None` when running in simulation mode.
-    pub config: Option<Config>,
-    /// Path to Eduba's local SQLite registry.
+    pub config: Option<crate::config::Config>,
     pub db_path: String,
-    /// Shared HTTP client for all outbound calls.
     pub http: reqwest::Client,
-    /// Base URL of the Sovereign Stack gateway (RAMGate).
     pub sovereign_url: String,
-    /// Whether the Sovereign Stack gateway answered its health check at startup.
     pub sovereign_online: bool,
+}
+
+impl Default for PipelineContext {
+    fn default() -> Self {
+        Self {
+            config: None,
+            db_path: "eduba_registry.db".to_string(),
+            http: reqwest::Client::new(),
+            sovereign_url: "http://127.0.0.1:3000".to_string(),
+            sovereign_online: false,
+        }
+    }
 }
 
 #[async_trait]
@@ -117,30 +112,32 @@ pub fn stages() -> Vec<Box<dyn Stage>> {
 pub async fn run(intent: &str) -> Result<Payload> {
     println!("=== Hammurabi AI Highway — Autonomous Pipeline ===");
     println!("Eduba System runtime online.");
-    println!("Intent: \"{intent}\"\n");
+    println!("Intent: \"{intent}\n");
 
-    let config = Config::from_env().ok();
+    let config = crate::config::Config::from_env().ok();
     if config.is_none() {
         println!("(no .env credentials — Digital Hands will simulate on-chain execution)");
     }
 
-    // A bounded timeout so a slow/hanging gateway (e.g. Ollama loading a model)
-    // degrades a stage gracefully instead of blocking the whole pipeline.
     let http = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
-        .unwrap_or_default();
+        .context("failed to build HTTP client")?;
+
     let sovereign_url = crate::sovereign::base_url();
     let sovereign_online = crate::sovereign::health(&http, &sovereign_url).await;
     println!(
         "Sovereign Stack gateway @ {sovereign_url}: {}\n",
-        if sovereign_online { "ONLINE" } else { "offline (stages degrade gracefully)" }
+        if sovereign_online {
+            "ONLINE"
+        } else {
+            "offline (stages degrade gracefully)"
+        }
     );
 
     let ctx = PipelineContext {
         config,
-        db_path: std::env::var("EDUBA_DB_PATH")
-            .unwrap_or_else(|_| "eduba_registry.db".to_string()),
+        db_path: std::env::var("EDUBA_DB_PATH").unwrap_or_else(|_| "eduba_registry.db".to_string()),
         http,
         sovereign_url,
         sovereign_online,
@@ -151,8 +148,19 @@ pub async fn run(intent: &str) -> Result<Payload> {
     let mut payload = Payload::new(intent);
 
     for (i, stage) in pipeline.iter().enumerate() {
-        println!("-- Lane {}/{}: {} ({}) --", i + 1, total, stage.name(), stage.role());
-        payload = stage.process(&ctx, payload).await?;
+        println!(
+            "-- Lane {}/{}: {} ({}) --",
+            i + 1,
+            total,
+            stage.name(),
+            stage.role()
+        );
+
+        payload = stage.process(&ctx, payload).await.map_err(|e| {
+            eprintln!("[ERROR] Stage {} failed: {}", stage.name(), e);
+            e
+        })?;
+
         println!();
     }
 

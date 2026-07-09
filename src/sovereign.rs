@@ -70,6 +70,7 @@ pub async fn agent_hierarchy(client: &reqwest::Client, base: &str) -> Result<Val
 }
 
 /// Millennium Falcon: existing indexed projects (used as a remote state check).
+#[allow(dead_code)] // reserved remote-state helper; not on the current pipeline path
 pub async fn list_projects(client: &reqwest::Client, base: &str) -> Result<Value> {
     get_json(client, format!("{base}/api/projects")).await
 }
